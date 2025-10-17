@@ -1,6 +1,6 @@
 {
   "name": "tanstack-db-pglite",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "packageManager": "pnpm@10.16.1",
   "description": "",
   "author": "Valerii Strilets",
@@ -18,7 +18,9 @@
   ],
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "prepublishOnly": "pnpm build",
     "build": "tsc",
@@ -26,7 +28,7 @@
     "lint:fix": "eslint . --fix"
   },
   "peerDependencies": {
-    "@tanstack/db": ">=0.2.0",
+    "@tanstack/db": ">=0.4.0",
     "drizzle-orm": ">=0.44.0"
   },
   "dependencies": {

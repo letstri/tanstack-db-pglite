@@ -9,8 +9,8 @@ importers:
   .:
     dependencies:
       '@tanstack/db':
-        specifier: '>=0.2.0'
-        version: 0.2.4(typescript@5.9.2)
+        specifier: '>=0.4.0'
+        version: 0.4.11(typescript@5.9.2)
       drizzle-orm:
         specifier: '>=0.44.0'
         version: 0.44.5
@@ -223,13 +223,13 @@ packages:
     peerDependencies:
       eslint: '>=9.0.0'
 
-  '@tanstack/db-ivm@0.1.6':
-    resolution: {integrity: sha512-E9M4lP4PlUW6Su54xmqYjGRLMrjtq9akDC3G1DNYr7sqlDKQeR654kGbFc+XNqajr4pFZvA9hV/oQO8DTHNYxQ==}
+  '@tanstack/db-ivm@0.1.11':
+    resolution: {integrity: sha512-xLCbIPRE6DUAKfR/Png2G5gqI+LseZ0qFdwSX+vs3q/37dzdHex5xDC666VQPz9IYy6nWjYebK3U7N0jx/xgSQ==}
     peerDependencies:
       typescript: '>=4.7'
 
-  '@tanstack/db@0.2.4':
-    resolution: {integrity: sha512-cVMbfLhvb9HFeNBFOEwyfZFXI6k636eYA5mrALRnEUrVXeKvW1uRR6FZMlkR0UJft2rzypyHeIlLjU7QS17knA==}
+  '@tanstack/db@0.4.11':
+    resolution: {integrity: sha512-xFK2ltAqpoW4Nr30cSNFXI40ILy9jWrcg3l3od4vUuG0O/Xhc5B5rcwGNMKvKOGS8LN1E0kyFHgMTC/mRKigtQ==}
     peerDependencies:
       typescript: '>=4.7'
 
@@ -1650,16 +1650,16 @@ snapshots:
       estraverse: 5.3.0
       picomatch: 4.0.3
 
-  '@tanstack/db-ivm@0.1.6(typescript@5.9.2)':
+  '@tanstack/db-ivm@0.1.11(typescript@5.9.2)':
     dependencies:
       fractional-indexing: 3.2.0
       sorted-btree: 1.8.1
       typescript: 5.9.2
 
-  '@tanstack/db@0.2.4(typescript@5.9.2)':
+  '@tanstack/db@0.4.11(typescript@5.9.2)':
     dependencies:
       '@standard-schema/spec': 1.0.0
-      '@tanstack/db-ivm': 0.1.6(typescript@5.9.2)
+      '@tanstack/db-ivm': 0.1.11(typescript@5.9.2)
       typescript: 5.9.2
 
   '@types/debug@4.1.12':

@@ -111,27 +111,31 @@ export function drizzleCollectionOptions<
   return {
     startSync: true,
     sync: {
-      sync: async (params) => {
-        try {
-          resolveSyncParams(params as SyncParams)
-          await config.prepare?.()
-          params.begin()
-          // @ts-expect-error drizzle types
-          const dbs = await config.db.select().from(config.table)
-          dbs.forEach((db) => {
-            params.write({ type: 'insert', value: db })
-          })
-          params.commit()
-          if (config.sync && startSync) {
-            await config.sync(await getSyncParams())
+      sync: (params) => {
+        resolveSyncParams(params as SyncParams)
+
+        ;(async () => {
+          try {
+            await config.prepare?.()
+            params.begin()
+            // @ts-expect-error drizzle types
+            const dbs = await config.db.select().from(config.table)
+            dbs.forEach((db) => {
+              params.write({ type: 'insert', value: db })
+            })
+            params.commit()
+            if (config.sync && startSync) {
+              await config.sync(await getSyncParams())
+            }
           }
-        }
-        finally {
-          params.markReady()
-        }
+          finally {
+            params.markReady()
+          }
+        })()
       },
     },
     gcTime: 0,
+    // @ts-expect-error wrong types
     schema: createSelectSchema(config.table),
     getKey: t => t[config.primaryColumn.name] as string,
     onInsert: async (params) => {
