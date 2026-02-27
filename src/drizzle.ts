@@ -39,17 +39,35 @@ export function drizzleCollectionOptions<
   // eslint-disable-next-line ts/no-explicit-any
   async function onDrizzleInsert(data: (typeof config.table.$inferInsert)[], tx?: PgTransaction<any, any, any>): Promise<void> {
     // @ts-expect-error drizzle types
-    await (tx || config.db).insert(config.table).values(data)
+    await (tx || config.db).insert(config.table).values(data).catch((e) => {
+      if (e instanceof Error && e.cause) {
+        throw e.cause
+      }
+
+      throw e
+    })
   }
 
   // eslint-disable-next-line ts/no-explicit-any
   async function onDrizzleUpdate(id: string, changes: Partial<typeof config.table.$inferSelect>, tx?: PgTransaction<any, any, any>): Promise<void> {
-    await (tx || config.db).update(config.table).set(changes).where(eq(config.primaryColumn, id))
+    await (tx || config.db).update(config.table).set(changes).where(eq(config.primaryColumn, id)).catch((e) => {
+      if (e instanceof Error && e.cause) {
+        throw e.cause
+      }
+
+      throw e
+    })
   }
 
   // eslint-disable-next-line ts/no-explicit-any
   async function onDrizzleDelete(ids: string[], tx?: PgTransaction<any, any, any>): Promise<void> {
-    await (tx || config.db).delete(config.table).where(inArray(config.primaryColumn, ids))
+    await (tx || config.db).delete(config.table).where(inArray(config.primaryColumn, ids)).catch((e) => {
+      if (e instanceof Error && e.cause) {
+        throw e.cause
+      }
+
+      throw e
+    })
   }
 
   const getSyncParams = async (): Promise<Pick<SyncParams, 'write' | 'collection'>> => {

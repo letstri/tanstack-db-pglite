@@ -1,7 +1,7 @@
 {
   "name": "tanstack-db-pglite",
-  "version": "1.0.5",
-  "packageManager": "pnpm@10.22.0",
+  "version": "1.0.6",
+  "packageManager": "pnpm@10.30.3",
   "description": "",
   "author": "Valerii Strilets",
   "license": "MIT",
@@ -25,19 +25,27 @@
     "prepublishOnly": "pnpm build",
     "build": "tsc",
     "lint": "eslint .",
-    "lint:fix": "eslint . --fix"
+    "lint:fix": "eslint . --fix",
+    "update": "taze -r -I major"
   },
   "peerDependencies": {
+    "@electric-sql/pglite": ">=0.3.0",
     "@tanstack/db": ">=0.5.0",
-    "drizzle-orm": ">=0.44.0"
+    "drizzle-orm": ">=0.45.0"
+  },
+  "peerDependenciesMeta": {
+    "drizzle-orm": {
+      "optional": true
+    }
   },
   "dependencies": {
     "drizzle-zod": "^0.8.3"
   },
   "devDependencies": {
-    "@antfu/eslint-config": "^6.2.0",
-    "eslint": "^9.39.1",
+    "@antfu/eslint-config": "^7.6.1",
+    "eslint": "^10.0.2",
     "jiti": "^2.6.1",
+    "taze": "^19.9.2",
     "typescript": "^5.9.3"
   }
 }
