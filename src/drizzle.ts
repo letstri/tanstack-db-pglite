@@ -13,7 +13,7 @@ import { eq, inArray } from 'drizzle-orm'
 import { createSelectSchema } from 'drizzle-zod'
 
 type SyncParams<Table extends PgTable> = Parameters<SyncConfig<Table['$inferSelect'], string>['sync']>[0]
-type Schema<Table extends PgTable> = BuildSchema<'select', Table['_']['columns'], undefined, true>
+type Schema<Table extends PgTable> = BuildSchema<'select', Table['_']['columns'], undefined, undefined>
 
 export function drizzleCollectionOptions<
   Table extends PgTable,
@@ -132,6 +132,8 @@ export function drizzleCollectionOptions<
       .where(eq(config.primaryColumn, m.key))))
   }
 
+  const schema = createSelectSchema(config.table)
+
   return {
     startSync: true,
     sync: {
@@ -159,7 +161,7 @@ export function drizzleCollectionOptions<
       },
     },
     gcTime: 0,
-    schema: createSelectSchema(config.table),
+    schema,
     getKey: t => t[config.primaryColumn.name] as string,
     onInsert: async (params) => {
       await config.db.transaction(async (tx) => {
@@ -208,6 +210,6 @@ export function drizzleCollectionOptions<
   } satisfies CollectionConfig<Table['$inferSelect'], string, Schema<Table>, {
     runSync: () => Promise<void>
   }> & {
-    schema: Schema<Table>
+    schema: typeof schema
   }
 }

@@ -199,6 +199,6 @@ export function sqlCollectionOptions<
   } satisfies CollectionConfig<Output<Schema>, string, Schema, {
     runSync: () => Promise<void>
   }> & {
-    schema: Schema
+    schema: typeof config.schema
   }
 }
