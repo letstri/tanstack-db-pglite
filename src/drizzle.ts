@@ -8,12 +8,14 @@ import type {
 } from '@tanstack/db'
 import type { IndexColumn, PgTable, PgTransaction } from 'drizzle-orm/pg-core'
 import type { PgliteDatabase } from 'drizzle-orm/pglite'
+import type { CreateSelectSchema } from 'drizzle-zod'
 import { eq, inArray } from 'drizzle-orm'
 import { createSelectSchema } from 'drizzle-zod'
 
+type SyncParams<Table extends PgTable> = Parameters<SyncConfig<Table['$inferSelect'], string>['sync']>[0]
+
 export function drizzleCollectionOptions<
   Table extends PgTable,
-  SyncParams extends Parameters<SyncConfig<Table['$inferSelect'], string>['sync']>[0] = Parameters<SyncConfig<Table['$inferSelect'], string>['sync']>[0],
 >({
   startSync = true,
   ...config
@@ -27,14 +29,13 @@ export function drizzleCollectionOptions<
   onDelete?: (params: DeleteMutationFnParams<Table['$inferSelect'], string>) => Promise<void>
   startSync?: boolean
   prepare?: () => Promise<unknown> | unknown
-  sync?: (params: Pick<SyncParams, 'write' | 'collection'>) => Promise<void>
-}): CollectionConfig<Table['$inferSelect'], string> & {
-  utils: {
-    runSync: () => Promise<void>
-  }
-} {
+  sync?: (params: Pick<SyncParams<Table>, 'write' | 'collection'>) => Promise<void>
+}): CollectionConfig<Table['$inferSelect'], string, ReturnType<CreateSelectSchema<Table['$inferSelect']>>, {
+  runSync: () => Promise<void>
+}> {
+  type SyncParamsType = SyncParams<Table>
   // Sync params can be null while running PGLite migrations
-  const { promise: syncParams, resolve: resolveSyncParams } = Promise.withResolvers<SyncParams>()
+  const { promise: syncParams, resolve: resolveSyncParams } = Promise.withResolvers<SyncParamsType>()
 
   // eslint-disable-next-line ts/no-explicit-any
   async function onDrizzleInsert(data: (typeof config.table.$inferInsert)[], tx?: PgTransaction<any, any, any>): Promise<void> {
@@ -70,26 +71,27 @@ export function drizzleCollectionOptions<
     })
   }
 
-  const getSyncParams = async (): Promise<Pick<SyncParams, 'write' | 'collection'>> => {
+  const getSyncParams = async (): Promise<Pick<SyncParamsType, 'write' | 'collection'>> => {
     const params = await syncParams
 
     return {
-      write: async (p) => {
+      write: async (message) => {
         params.begin()
         try {
-          if (p.type === 'insert') {
-            await onDrizzleInsert([p.value])
+          if (message.type === 'insert') {
+            await onDrizzleInsert([message.value])
           }
-          else if (p.type === 'update') {
+          else if (message.type === 'update') {
             await onDrizzleUpdate(
-              params.collection.getKeyFromItem(p.value),
-              p.value,
+              params.collection.getKeyFromItem(message.value),
+              message.value,
             )
           }
-          else if (p.type === 'delete') {
-            await onDrizzleDelete([params.collection.getKeyFromItem(p.value)])
+          else if (message.type === 'delete') {
+            const key = 'key' in message ? message.key : params.collection.getKeyFromItem(message.value)
+            await onDrizzleDelete([key])
           }
-          params.write(p)
+          params.write(message)
         }
         finally {
           params.commit()
@@ -104,7 +106,12 @@ export function drizzleCollectionOptions<
     const { begin, write, commit } = await syncParams
     begin()
     mutations.forEach((m) => {
-      write({ type: m.type, value: m.modified })
+      if (m.type === 'delete') {
+        write({ type: 'delete', key: m.key })
+      }
+      else {
+        write({ type: m.type, value: m.modified })
+      }
     })
     commit()
   }
@@ -130,7 +137,7 @@ export function drizzleCollectionOptions<
     startSync: true,
     sync: {
       sync: (params) => {
-        resolveSyncParams(params as SyncParams)
+        resolveSyncParams(params as SyncParamsType)
 
         ;(async () => {
           try {
