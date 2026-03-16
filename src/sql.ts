@@ -9,8 +9,9 @@ import type {
   SyncConfig,
   UpdateMutationFnParams,
 } from '@tanstack/db'
+import type { PgliteUtils } from './utils'
 
-function quoteId(name: string): string {
+function quoteId(name: string) {
   // eslint-disable-next-line e18e/prefer-static-regex
   return `"${String(name).replace(/"/g, '""')}"`
 }
@@ -26,18 +27,21 @@ export function sqlCollectionOptions<
   ...config
 }: {
   db: PGlite | PGliteWorker
+  startSync?: boolean
   tableName: string
   primaryKeyColumn: Extract<keyof Output<Schema>, string>
   schema: Schema
   getKey?: (row: Output<Schema>) => string
+  prepare?: () => Promise<unknown> | unknown
+  sync?: (params: Pick<SyncParams<Output<Schema>>, 'write' | 'collection'>) => Promise<void>
   onInsert?: (params: InsertMutationFnParams<Output<Schema>, string>) => Promise<void>
   onUpdate?: (params: UpdateMutationFnParams<Output<Schema>, string>) => Promise<void>
   onDelete?: (params: DeleteMutationFnParams<Output<Schema>, string>) => Promise<void>
-  startSync?: boolean
-  prepare?: () => Promise<unknown> | unknown
-  sync?: (params: Pick<SyncParams<Output<Schema>>, 'write' | 'collection'>) => Promise<void>
-}) {
+}): CollectionConfig<Output<Schema>, string, Schema, PgliteUtils> & {
+  schema: typeof config.schema
+} {
   type SyncParamsType = SyncParams<Output<Schema>>
+  let resolvers = Promise.withResolvers()
   const table = quoteId(config.tableName)
   const primaryKey = quoteId(config.primaryKeyColumn)
   const getKey = config.getKey ?? ((row: Output<Schema>) => String(row[config.primaryKeyColumn]))
@@ -130,6 +134,8 @@ export function sqlCollectionOptions<
       sync: (params) => {
         resolveSyncParams(params as SyncParamsType)
 
+        resolvers = Promise.withResolvers()
+
         ;(async () => {
           try {
             await config.prepare?.()
@@ -141,6 +147,7 @@ export function sqlCollectionOptions<
             params.commit()
             if (config.sync && startSync) {
               await config.sync(await getSyncParams())
+              resolvers.resolve(undefined)
             }
           }
           finally {
@@ -195,10 +202,9 @@ export function sqlCollectionOptions<
 
         await config.sync(params)
       },
+      waitForSync: async () => {
+        await resolvers.promise
+      },
     },
-  } satisfies CollectionConfig<Output<Schema>, string, Schema, {
-    runSync: () => Promise<void>
-  }> & {
-    schema: typeof config.schema
   }
 }

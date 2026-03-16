@@ -8,12 +8,15 @@ import type {
 } from '@tanstack/db'
 import type { IndexColumn, PgTable, PgTransaction } from 'drizzle-orm/pg-core'
 import type { PgliteDatabase } from 'drizzle-orm/pglite'
-import type { BuildSchema } from 'drizzle-zod'
+import type { PgliteUtils } from './utils'
 import { eq, inArray } from 'drizzle-orm'
 import { createSelectSchema } from 'drizzle-zod'
 
+function getSchema<Table extends PgTable>(table: Table) {
+  return createSelectSchema(table)
+}
+
 type SyncParams<Table extends PgTable> = Parameters<SyncConfig<Table['$inferSelect'], string>['sync']>[0]
-type Schema<Table extends PgTable> = BuildSchema<'select', Table['_']['columns'], undefined, undefined>
 
 export function drizzleCollectionOptions<
   Table extends PgTable,
@@ -23,16 +26,19 @@ export function drizzleCollectionOptions<
 }: {
   // eslint-disable-next-line ts/no-explicit-any
   db: PgliteDatabase<any>
+  startSync?: boolean
   table: Table
   primaryColumn: IndexColumn
+  sync?: (params: Pick<SyncParams<Table>, 'write' | 'collection'>) => Promise<void>
+  prepare?: () => Promise<unknown> | unknown
   onInsert?: (params: InsertMutationFnParams<Table['$inferSelect'], string>) => Promise<void>
   onUpdate?: (params: UpdateMutationFnParams<Table['$inferSelect'], string>) => Promise<void>
   onDelete?: (params: DeleteMutationFnParams<Table['$inferSelect'], string>) => Promise<void>
-  startSync?: boolean
-  prepare?: () => Promise<unknown> | unknown
-  sync?: (params: Pick<SyncParams<Table>, 'write' | 'collection'>) => Promise<void>
-}) {
+}): CollectionConfig<Table['$inferSelect'], string, ReturnType<typeof getSchema<Table>>, PgliteUtils> & {
+  schema: ReturnType<typeof getSchema<Table>>
+} {
   type SyncParamsType = SyncParams<Table>
+  let resolvers = Promise.withResolvers()
   // Sync params can be null while running PGLite migrations
   const { promise: syncParams, resolve: resolveSyncParams } = Promise.withResolvers<SyncParamsType>()
 
@@ -132,13 +138,13 @@ export function drizzleCollectionOptions<
       .where(eq(config.primaryColumn, m.key))))
   }
 
-  const schema = createSelectSchema(config.table)
-
   return {
     startSync: true,
     sync: {
       sync: (params) => {
         resolveSyncParams(params as SyncParamsType)
+
+        resolvers = Promise.withResolvers()
 
         ;(async () => {
           try {
@@ -152,6 +158,7 @@ export function drizzleCollectionOptions<
             params.commit()
             if (config.sync && startSync) {
               await config.sync(await getSyncParams())
+              resolvers.resolve(undefined)
             }
           }
           finally {
@@ -161,7 +168,7 @@ export function drizzleCollectionOptions<
       },
     },
     gcTime: 0,
-    schema,
+    schema: getSchema(config.table),
     getKey: t => t[config.primaryColumn.name] as string,
     onInsert: async (params) => {
       await config.db.transaction(async (tx) => {
@@ -206,10 +213,9 @@ export function drizzleCollectionOptions<
 
         await config.sync(params)
       },
+      waitForSync: async () => {
+        await resolvers.promise
+      },
     },
-  } satisfies CollectionConfig<Table['$inferSelect'], string, Schema<Table>, {
-    runSync: () => Promise<void>
-  }> & {
-    schema: typeof schema
   }
 }
