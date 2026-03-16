@@ -31,11 +31,7 @@ export function drizzleCollectionOptions<
   startSync?: boolean
   prepare?: () => Promise<unknown> | unknown
   sync?: (params: Pick<SyncParams<Table>, 'write' | 'collection'>) => Promise<void>
-}): CollectionConfig<Table['$inferSelect'], string, Schema<Table>, {
-  runSync: () => Promise<void>
-}> & {
-  schema: Schema<Table>
-} {
+}) {
   type SyncParamsType = SyncParams<Table>
   // Sync params can be null while running PGLite migrations
   const { promise: syncParams, resolve: resolveSyncParams } = Promise.withResolvers<SyncParamsType>()
@@ -209,5 +205,9 @@ export function drizzleCollectionOptions<
         await config.sync(params)
       },
     },
+  } satisfies CollectionConfig<Table['$inferSelect'], string, Schema<Table>, {
+    runSync: () => Promise<void>
+  }> & {
+    schema: Schema<Table>
   }
 }

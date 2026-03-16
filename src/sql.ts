@@ -36,11 +36,7 @@ export function sqlCollectionOptions<
   startSync?: boolean
   prepare?: () => Promise<unknown> | unknown
   sync?: (params: Pick<SyncParams<Output<Schema>>, 'write' | 'collection'>) => Promise<void>
-}): CollectionConfig<Output<Schema>, string, Schema, {
-  runSync: () => Promise<void>
-}> & {
-  schema: Schema
-} {
+}) {
   type SyncParamsType = SyncParams<Output<Schema>>
   const table = quoteId(config.tableName)
   const primaryKey = quoteId(config.primaryKeyColumn)
@@ -200,5 +196,9 @@ export function sqlCollectionOptions<
         await config.sync(params)
       },
     },
+  } satisfies CollectionConfig<Output<Schema>, string, Schema, {
+    runSync: () => Promise<void>
+  }> & {
+    schema: Schema
   }
 }
