@@ -1,3 +1,4 @@
+import type { StandardSchemaV1 } from '@standard-schema/spec'
 import type {
   CollectionConfig,
   DeleteMutationFnParams,
@@ -12,10 +13,7 @@ import type { PgliteUtils } from './utils'
 import { eq, inArray } from 'drizzle-orm'
 import { createSelectSchema } from 'drizzle-zod'
 
-function getSchema<Table extends PgTable>(table: Table) {
-  return createSelectSchema(table)
-}
-
+type Schema<Table extends PgTable> = StandardSchemaV1<Table['$inferSelect'], Table['$inferSelect']>
 type SyncParams<Table extends PgTable> = Parameters<SyncConfig<Table['$inferSelect'], string>['sync']>[0]
 
 export function drizzleCollectionOptions<
@@ -34,8 +32,8 @@ export function drizzleCollectionOptions<
   onInsert?: (params: InsertMutationFnParams<Table['$inferSelect'], string>) => Promise<void>
   onUpdate?: (params: UpdateMutationFnParams<Table['$inferSelect'], string>) => Promise<void>
   onDelete?: (params: DeleteMutationFnParams<Table['$inferSelect'], string>) => Promise<void>
-}): CollectionConfig<Table['$inferSelect'], string, ReturnType<typeof getSchema<Table>>, PgliteUtils> & {
-  schema: ReturnType<typeof getSchema<Table>>
+}): CollectionConfig<Table['$inferSelect'], string, Schema<Table>, PgliteUtils> & {
+  schema: Schema<Table>
 } {
   type SyncParamsType = SyncParams<Table>
   let resolvers = Promise.withResolvers()
@@ -168,7 +166,7 @@ export function drizzleCollectionOptions<
       },
     },
     gcTime: 0,
-    schema: getSchema(config.table),
+    schema: createSelectSchema(config.table),
     getKey: t => t[config.primaryColumn.name] as string,
     onInsert: async (params) => {
       await config.db.transaction(async (tx) => {
