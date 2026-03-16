@@ -142,8 +142,6 @@ export function drizzleCollectionOptions<
       sync: (params) => {
         resolveSyncParams(params as SyncParamsType)
 
-        resolvers = Promise.withResolvers()
-
         ;(async () => {
           try {
             await config.prepare?.()
@@ -155,6 +153,7 @@ export function drizzleCollectionOptions<
             })
             params.commit()
             if (config.sync && startSync) {
+              resolvers = Promise.withResolvers()
               await config.sync(await getSyncParams())
               resolvers.resolve(undefined)
             }
@@ -209,7 +208,9 @@ export function drizzleCollectionOptions<
         // To wait the first sync
         await params.collection.stateWhenReady()
 
+        resolvers = Promise.withResolvers()
         await config.sync(params)
+        resolvers.resolve(undefined)
       },
       waitForSync: async () => {
         await resolvers.promise

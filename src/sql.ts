@@ -134,8 +134,6 @@ export function sqlCollectionOptions<
       sync: (params) => {
         resolveSyncParams(params as SyncParamsType)
 
-        resolvers = Promise.withResolvers()
-
         ;(async () => {
           try {
             await config.prepare?.()
@@ -146,6 +144,7 @@ export function sqlCollectionOptions<
             })
             params.commit()
             if (config.sync && startSync) {
+              resolvers = Promise.withResolvers()
               await config.sync(await getSyncParams())
               resolvers.resolve(undefined)
             }
@@ -200,7 +199,9 @@ export function sqlCollectionOptions<
 
         await params.collection.stateWhenReady()
 
+        resolvers = Promise.withResolvers()
         await config.sync(params)
+        resolvers.resolve(undefined)
       },
       waitForSync: async () => {
         await resolvers.promise
