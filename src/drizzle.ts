@@ -8,11 +8,12 @@ import type {
 } from '@tanstack/db'
 import type { IndexColumn, PgTable, PgTransaction } from 'drizzle-orm/pg-core'
 import type { PgliteDatabase } from 'drizzle-orm/pglite'
-import type { CreateSelectSchema } from 'drizzle-zod'
+import type { BuildSchema } from 'drizzle-zod'
 import { eq, inArray } from 'drizzle-orm'
 import { createSelectSchema } from 'drizzle-zod'
 
 type SyncParams<Table extends PgTable> = Parameters<SyncConfig<Table['$inferSelect'], string>['sync']>[0]
+type Schema<Table extends PgTable> = BuildSchema<'select', Table['_']['columns'], undefined, true>
 
 export function drizzleCollectionOptions<
   Table extends PgTable,
@@ -30,10 +31,10 @@ export function drizzleCollectionOptions<
   startSync?: boolean
   prepare?: () => Promise<unknown> | unknown
   sync?: (params: Pick<SyncParams<Table>, 'write' | 'collection'>) => Promise<void>
-}): CollectionConfig<Table['$inferSelect'], string, ReturnType<CreateSelectSchema<Table['$inferSelect']>>, {
+}): CollectionConfig<Table['$inferSelect'], string, Schema<Table>, {
   runSync: () => Promise<void>
 }> & {
-  schema: ReturnType<CreateSelectSchema<Table['$inferSelect']>>
+  schema: Schema<Table>
 } {
   type SyncParamsType = SyncParams<Table>
   // Sync params can be null while running PGLite migrations
@@ -162,7 +163,6 @@ export function drizzleCollectionOptions<
       },
     },
     gcTime: 0,
-    // @ts-expect-error wrong types
     schema: createSelectSchema(config.table),
     getKey: t => t[config.primaryColumn.name] as string,
     onInsert: async (params) => {
