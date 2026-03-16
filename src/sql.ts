@@ -1,4 +1,5 @@
 import type { PGlite, Transaction } from '@electric-sql/pglite'
+import type { PGliteWorker } from '@electric-sql/pglite/worker'
 import type { StandardSchemaV1 } from '@standard-schema/spec'
 import type {
   CollectionConfig,
@@ -24,7 +25,7 @@ export function sqlCollectionOptions<
   startSync = true,
   ...config
 }: {
-  db: PGlite
+  db: PGlite | PGliteWorker
   tableName: string
   primaryKeyColumn: Extract<keyof Output<Schema>, string>
   schema: Schema
@@ -47,12 +48,12 @@ export function sqlCollectionOptions<
 
   const { promise: syncParams, resolve: resolveSyncParams } = Promise.withResolvers<SyncParamsType>()
 
-  async function runSelect(client: PGlite | Transaction): Promise<Output<Schema>[]> {
+  async function runSelect(client: PGlite | PGliteWorker | Transaction): Promise<Output<Schema>[]> {
     const result = await client.query(`SELECT * FROM ${table}`)
     return (result.rows ?? []) as Output<Schema>[]
   }
 
-  async function runInsert(client: PGlite | Transaction, rows: Output<Schema>[]): Promise<void> {
+  async function runInsert(client: PGlite | PGliteWorker | Transaction, rows: Output<Schema>[]): Promise<void> {
     for (const row of rows) {
       const cols = Object.keys(row).filter(k => row[k] !== undefined)
       if (cols.length === 0)
@@ -64,7 +65,7 @@ export function sqlCollectionOptions<
     }
   }
 
-  async function runUpdate(client: PGlite | Transaction, id: string, changes: Partial<Output<Schema>>): Promise<void> {
+  async function runUpdate(client: PGlite | PGliteWorker | Transaction, id: string, changes: Partial<Output<Schema>>): Promise<void> {
     const entries = Object.entries(changes).filter(([, v]) => v !== undefined) as [string, unknown][]
     if (entries.length === 0)
       return
@@ -75,7 +76,7 @@ export function sqlCollectionOptions<
     await client.query(`UPDATE ${table} SET ${setClause} WHERE ${primaryKey} = $${params.length}`, params)
   }
 
-  async function runDelete(client: PGlite | Transaction, ids: string[]): Promise<void> {
+  async function runDelete(client: PGlite | PGliteWorker | Transaction, ids: string[]): Promise<void> {
     if (ids.length === 0)
       return
 

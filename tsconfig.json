@@ -4,7 +4,7 @@
     "moduleDetection": "force",
     "rootDir": "./src",
     "module": "esnext",
-    "moduleResolution": "node",
+    "moduleResolution": "bundler",
     "strict": true,
     "exactOptionalPropertyTypes": true,
     "noUncheckedIndexedAccess": true,
