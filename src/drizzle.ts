@@ -74,36 +74,6 @@ export function drizzleCollectionOptions<
     })
   }
 
-  const getSyncParams = async (): Promise<Pick<SyncParamsType, 'write' | 'collection'>> => {
-    const params = await syncParams
-
-    return {
-      write: async (message) => {
-        params.begin()
-        try {
-          if (message.type === 'insert') {
-            await onDrizzleInsert([message.value])
-          }
-          else if (message.type === 'update') {
-            await onDrizzleUpdate(
-              params.collection.getKeyFromItem(message.value),
-              message.value,
-            )
-          }
-          else if (message.type === 'delete') {
-            const key = 'key' in message ? message.key : params.collection.getKeyFromItem(message.value)
-            await onDrizzleDelete([key])
-          }
-          params.write(message)
-        }
-        finally {
-          params.commit()
-        }
-      },
-      collection: params.collection,
-    }
-  }
-
   // Mutations should run if everything is okay inside "on" handlers
   async function runMutations(mutations: PendingMutation[]): Promise<void> {
     const { begin, write, commit } = await syncParams
@@ -136,6 +106,47 @@ export function drizzleCollectionOptions<
       .where(eq(config.primaryColumn, m.key))))
   }
 
+  const sync = async () => {
+    if (!config.sync) {
+      return
+    }
+
+    const params = await syncParams
+
+    resolvers.reject()
+    resolvers = Promise.withResolvers()
+    await config.sync({
+      write: async (message) => {
+        params.begin()
+        try {
+          if (message.type === 'insert') {
+            await onDrizzleInsert([message.value])
+          }
+          else if (message.type === 'update') {
+            await onDrizzleUpdate(
+              params.collection.getKeyFromItem(message.value),
+              message.value,
+            )
+          }
+          else if (message.type === 'delete') {
+            const key = 'key' in message ? message.key : params.collection.getKeyFromItem(message.value)
+            await onDrizzleDelete([key])
+          }
+          params.write(message)
+        }
+        finally {
+          params.commit()
+        }
+      },
+      collection: params.collection,
+    })
+    resolvers.resolve(undefined)
+  }
+
+  const waitForSync = async () => {
+    await resolvers.promise.catch(() => waitForSync())
+  }
+
   return {
     startSync: true,
     sync: {
@@ -152,10 +163,8 @@ export function drizzleCollectionOptions<
               params.write({ type: 'insert', value: db })
             })
             params.commit()
-            if (config.sync && startSync) {
-              resolvers = Promise.withResolvers()
-              await config.sync(await getSyncParams())
-              resolvers.resolve(undefined)
+            if (startSync) {
+              sync()
             }
           }
           finally {
@@ -202,18 +211,12 @@ export function drizzleCollectionOptions<
           throw new Error('Sync is not defined')
         }
 
-        const params = await getSyncParams()
-
-        // To wait the first sync
+        const params = await syncParams
         await params.collection.stateWhenReady()
 
-        resolvers = Promise.withResolvers()
-        await config.sync(params)
-        resolvers.resolve(undefined)
+        sync()
       },
-      waitForSync: async () => {
-        await resolvers.promise
-      },
+      waitForSync,
     },
   }
 }

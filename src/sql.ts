@@ -83,37 +83,6 @@ export function sqlCollectionOptions<
     await client.query(`DELETE FROM ${table} WHERE ${primaryKey} = ANY($1)`, [ids])
   }
 
-  const getSyncParams = async (): Promise<Pick<SyncParamsType, 'write' | 'collection'>> => {
-    const params = await syncParams
-
-    return {
-      write: async (p) => {
-        params.begin()
-        try {
-          if (p.type === 'insert') {
-            await runInsert(config.db, [p.value as Output<Schema>])
-          }
-          else if (p.type === 'update') {
-            await runUpdate(
-              config.db,
-              params.collection.getKeyFromItem(p.value),
-              p.value as Partial<Output<Schema>>,
-            )
-          }
-          else if (p.type === 'delete') {
-            const key = 'key' in p ? p.key : params.collection.getKeyFromItem(p.value)
-            await runDelete(config.db, [key])
-          }
-          params.write(p)
-        }
-        finally {
-          params.commit()
-        }
-      },
-      collection: params.collection,
-    }
-  }
-
   async function runMutations(mutations: PendingMutation[]): Promise<void> {
     const { begin, write, commit } = await syncParams
     begin()
@@ -122,10 +91,54 @@ export function sqlCollectionOptions<
         write({ type: 'delete', key: m.key })
       }
       else {
-        write({ type: m.type, value: m.modified as Output<Schema> })
+        write({ type: m.type, value: m.modified })
       }
     })
     commit()
+  }
+
+  const sync = async () => {
+    if (!config.sync) {
+      return
+    }
+
+    const params = await syncParams
+
+    resolvers.reject()
+    resolvers = Promise.withResolvers()
+    await config.sync(
+      {
+        write: async (p) => {
+          params.begin()
+          try {
+            if (p.type === 'insert') {
+              await runInsert(config.db, [p.value])
+            }
+            else if (p.type === 'update') {
+              await runUpdate(
+                config.db,
+                params.collection.getKeyFromItem(p.value),
+                p.value,
+              )
+            }
+            else if (p.type === 'delete') {
+              const key = 'key' in p ? p.key : params.collection.getKeyFromItem(p.value)
+              await runDelete(config.db, [key])
+            }
+            params.write(p)
+          }
+          finally {
+            params.commit()
+          }
+        },
+        collection: params.collection,
+      },
+    )
+    resolvers.resolve(undefined)
+  }
+
+  const waitForSync = async () => {
+    await resolvers.promise.catch(() => waitForSync())
   }
 
   return {
@@ -143,10 +156,8 @@ export function sqlCollectionOptions<
               params.write({ type: 'insert', value: row })
             })
             params.commit()
-            if (config.sync && startSync) {
-              resolvers = Promise.withResolvers()
-              await config.sync(await getSyncParams())
-              resolvers.resolve(undefined)
+            if (startSync) {
+              sync()
             }
           }
           finally {
@@ -159,25 +170,23 @@ export function sqlCollectionOptions<
     getKey,
     onInsert: async (params) => {
       await config.db.transaction(async (tx) => {
-        await runInsert(tx, params.transaction.mutations.map(m => m.modified as Output<Schema>))
+        await runInsert(tx, params.transaction.mutations.map(m => m.modified))
         if (config.onInsert) {
           await config.onInsert(params)
         }
       })
-      await runMutations(params.transaction.mutations as PendingMutation[])
+      await runMutations(params.transaction.mutations)
     },
     onUpdate: async (params) => {
       await config.db.transaction(async (tx) => {
         await Promise.all(
-          params.transaction.mutations.map(m =>
-            runUpdate(tx, m.key, m.changes as Partial<Output<Schema>>),
-          ),
+          params.transaction.mutations.map(m => runUpdate(tx, m.key, m.changes)),
         )
         if (config.onUpdate) {
           await config.onUpdate(params)
         }
       })
-      await runMutations(params.transaction.mutations as PendingMutation[])
+      await runMutations(params.transaction.mutations)
     },
     onDelete: async (params) => {
       await config.db.transaction(async (tx) => {
@@ -186,7 +195,7 @@ export function sqlCollectionOptions<
           await config.onDelete(params)
         }
       })
-      await runMutations(params.transaction.mutations as PendingMutation[])
+      await runMutations(params.transaction.mutations)
     },
     utils: {
       runSync: async () => {
@@ -194,17 +203,12 @@ export function sqlCollectionOptions<
           throw new Error('Sync is not defined')
         }
 
-        const params = await getSyncParams()
-
+        const params = await syncParams
         await params.collection.stateWhenReady()
 
-        resolvers = Promise.withResolvers()
-        await config.sync(params)
-        resolvers.resolve(undefined)
+        sync()
       },
-      waitForSync: async () => {
-        await resolvers.promise
-      },
+      waitForSync,
     },
   }
 }
