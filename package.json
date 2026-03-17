@@ -7,8 +7,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/letstri/tanstack-db-pglite.git",
-    "directory": "tanstack-db-pglite"
+    "url": "git+https://github.com/letstri/tanstack-db-pglite.git"
   },
   "keywords": [
     "tanstack",
