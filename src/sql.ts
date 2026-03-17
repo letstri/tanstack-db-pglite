@@ -104,7 +104,10 @@ export function sqlCollectionOptions<
 
     const params = await syncParams
 
-    resolvers.reject()
+    try {
+      resolvers.reject()
+    }
+    catch {}
     resolvers = Promise.withResolvers()
     await config.sync(
       {

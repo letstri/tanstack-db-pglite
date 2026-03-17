@@ -113,7 +113,10 @@ export function drizzleCollectionOptions<
 
     const params = await syncParams
 
-    resolvers.reject()
+    try {
+      resolvers.reject()
+    }
+    catch {}
     resolvers = Promise.withResolvers()
     await config.sync({
       write: async (message) => {
