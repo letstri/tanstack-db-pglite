@@ -118,26 +118,22 @@ export function drizzleCollectionOptions<
     previousResolvers.resolve({ continue: true })
     await config.sync({
       write: async (message) => {
+        if (message.type === 'insert') {
+          await onDrizzleInsert([message.value])
+        }
+        else if (message.type === 'update') {
+          await onDrizzleUpdate(
+            params.collection.getKeyFromItem(message.value),
+            message.value,
+          )
+        }
+        else if (message.type === 'delete') {
+          const key = 'key' in message ? message.key : params.collection.getKeyFromItem(message.value)
+          await onDrizzleDelete([key])
+        }
         params.begin()
-        try {
-          if (message.type === 'insert') {
-            await onDrizzleInsert([message.value])
-          }
-          else if (message.type === 'update') {
-            await onDrizzleUpdate(
-              params.collection.getKeyFromItem(message.value),
-              message.value,
-            )
-          }
-          else if (message.type === 'delete') {
-            const key = 'key' in message ? message.key : params.collection.getKeyFromItem(message.value)
-            await onDrizzleDelete([key])
-          }
-          params.write(message)
-        }
-        finally {
-          params.commit()
-        }
+        params.write(message)
+        params.commit()
       },
       collection: params.collection,
     })
@@ -157,9 +153,10 @@ export function drizzleCollectionOptions<
         ;(async () => {
           try {
             await config.prepare?.()
-            params.begin()
             // @ts-expect-error drizzle types
             const dbs = await config.db.select().from(config.table)
+
+            params.begin()
             dbs.forEach((db) => {
               params.write({ type: 'insert', value: db })
             })

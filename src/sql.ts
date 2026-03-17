@@ -110,27 +110,23 @@ export function sqlCollectionOptions<
     await config.sync(
       {
         write: async (p) => {
+          if (p.type === 'insert') {
+            await runInsert(config.db, [p.value])
+          }
+          else if (p.type === 'update') {
+            await runUpdate(
+              config.db,
+              params.collection.getKeyFromItem(p.value),
+              p.value,
+            )
+          }
+          else if (p.type === 'delete') {
+            const key = 'key' in p ? p.key : params.collection.getKeyFromItem(p.value)
+            await runDelete(config.db, [key])
+          }
           params.begin()
-          try {
-            if (p.type === 'insert') {
-              await runInsert(config.db, [p.value])
-            }
-            else if (p.type === 'update') {
-              await runUpdate(
-                config.db,
-                params.collection.getKeyFromItem(p.value),
-                p.value,
-              )
-            }
-            else if (p.type === 'delete') {
-              const key = 'key' in p ? p.key : params.collection.getKeyFromItem(p.value)
-              await runDelete(config.db, [key])
-            }
-            params.write(p)
-          }
-          finally {
-            params.commit()
-          }
+          params.write(p)
+          params.commit()
         },
         collection: params.collection,
       },
@@ -151,8 +147,8 @@ export function sqlCollectionOptions<
         ;(async () => {
           try {
             await config.prepare?.()
-            params.begin()
             const rows = await runSelect(config.db)
+            params.begin()
             rows.forEach((row) => {
               params.write({ type: 'insert', value: row })
             })
