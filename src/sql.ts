@@ -41,7 +41,7 @@ export function sqlCollectionOptions<
   schema: typeof config.schema
 } {
   type SyncParamsType = SyncParams<Output<Schema>>
-  let resolvers = Promise.withResolvers()
+  let resolvers = Promise.withResolvers<{ continue: boolean }>()
   const table = quoteId(config.tableName)
   const primaryKey = quoteId(config.primaryKeyColumn)
   const getKey = config.getKey ?? ((row: Output<Schema>) => String(row[config.primaryKeyColumn]))
@@ -104,11 +104,9 @@ export function sqlCollectionOptions<
 
     const params = await syncParams
 
-    try {
-      resolvers.reject()
-    }
-    catch {}
+    const previousResolvers = resolvers
     resolvers = Promise.withResolvers()
+    previousResolvers.resolve({ continue: true })
     await config.sync(
       {
         write: async (p) => {
@@ -137,11 +135,11 @@ export function sqlCollectionOptions<
         collection: params.collection,
       },
     )
-    resolvers.resolve(undefined)
+    resolvers.resolve({ continue: false })
   }
 
   const waitForSync = async () => {
-    await resolvers.promise.catch(() => waitForSync())
+    await resolvers.promise.then(r => r.continue ? waitForSync() : undefined)
   }
 
   return {

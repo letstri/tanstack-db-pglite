@@ -36,7 +36,7 @@ export function drizzleCollectionOptions<
   schema: Schema<Table>
 } {
   type SyncParamsType = SyncParams<Table>
-  let resolvers = Promise.withResolvers()
+  let resolvers = Promise.withResolvers<{ continue: boolean }>()
   // Sync params can be null while running PGLite migrations
   const { promise: syncParams, resolve: resolveSyncParams } = Promise.withResolvers<SyncParamsType>()
 
@@ -113,11 +113,9 @@ export function drizzleCollectionOptions<
 
     const params = await syncParams
 
-    try {
-      resolvers.reject()
-    }
-    catch {}
+    const previousResolvers = resolvers
     resolvers = Promise.withResolvers()
+    previousResolvers.resolve({ continue: true })
     await config.sync({
       write: async (message) => {
         params.begin()
@@ -143,11 +141,11 @@ export function drizzleCollectionOptions<
       },
       collection: params.collection,
     })
-    resolvers.resolve(undefined)
+    resolvers.resolve({ continue: false })
   }
 
   const waitForSync = async () => {
-    await resolvers.promise.catch(() => waitForSync())
+    await resolvers.promise.then(r => r.continue ? waitForSync() : undefined)
   }
 
   return {
