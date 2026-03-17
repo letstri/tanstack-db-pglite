@@ -155,7 +155,6 @@ export function sqlCollectionOptions<
         })()
       },
     },
-    gcTime: 0,
     schema: config.schema,
     getKey,
     onInsert: async (params) => {

@@ -164,7 +164,6 @@ export function drizzleCollectionOptions<
         })()
       },
     },
-    gcTime: 0,
     schema: createSelectSchema(config.table),
     getKey: t => t[config.primaryColumn.name] as string,
     onInsert: async (params) => {
