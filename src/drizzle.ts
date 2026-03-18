@@ -212,7 +212,7 @@ export function drizzleCollectionOptions<
         const params = await syncParams
         await params.collection.stateWhenReady()
 
-        sync()
+        await sync()
       },
       waitForSync,
     },
