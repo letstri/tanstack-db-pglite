@@ -119,7 +119,9 @@ export function drizzleCollectionOptions<
     const params = await syncParams
 
     if (force) {
+      params.begin()
       params.truncate()
+      params.commit()
     }
 
     if (!config.sync) {
