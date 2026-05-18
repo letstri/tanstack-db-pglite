@@ -145,7 +145,7 @@ export function sqlCollectionOptions<
   }
 
   return {
-    startSync,
+    startSync: true,
     autoIndex: 'eager',
     defaultIndexType: BasicIndex,
     sync: {

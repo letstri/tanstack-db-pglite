@@ -155,7 +155,7 @@ export function drizzleCollectionOptions<
   }
 
   return {
-    startSync,
+    startSync: true,
     autoIndex: 'eager',
     defaultIndexType: BasicIndex,
     sync: {
