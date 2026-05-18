@@ -115,14 +115,8 @@ export function drizzleCollectionOptions<
       .where(eq(config.primaryColumn, m.key))))
   }
 
-  const sync = async (force = false): Promise<(() => void) | void> => {
+  const sync = async (): Promise<(() => void) | void> => {
     const params = await syncParams
-
-    if (force) {
-      params.begin()
-      params.truncate()
-      params.commit()
-    }
 
     if (!config.sync) {
       params.markReady()
@@ -232,7 +226,7 @@ export function drizzleCollectionOptions<
         const params = await syncParams
         await params.collection.stateWhenReady()
 
-        await sync(true)
+        await sync()
       },
     },
   }
