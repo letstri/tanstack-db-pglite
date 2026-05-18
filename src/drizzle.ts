@@ -49,6 +49,8 @@ export function drizzleCollectionOptions<
   // Sync params can be null while running PGLite migrations
   const { promise: syncParams, resolve: resolveSyncParams } = Promise.withResolvers<SyncParamsType>()
 
+  let syncCleanup: (() => void) | undefined
+
   // eslint-disable-next-line ts/no-explicit-any
   async function onDrizzleInsert(data: (typeof config.table.$inferInsert)[], tx?: PgTransaction<any, any, any>): Promise<void> {
     // @ts-expect-error drizzle types
@@ -157,8 +159,6 @@ export function drizzleCollectionOptions<
       sync: (params) => {
         resolveSyncParams(params as SyncParamsType)
 
-        let cleanup: (() => void) | undefined
-
         ;(async () => {
           await config.prepare?.()
           // @ts-expect-error drizzle types
@@ -172,7 +172,7 @@ export function drizzleCollectionOptions<
           if (startSync) {
             const result = await sync()
             if (typeof result === 'function') {
-              cleanup = result
+              syncCleanup = result
             }
           }
           else {
@@ -181,7 +181,8 @@ export function drizzleCollectionOptions<
         })()
 
         return () => {
-          cleanup?.()
+          syncCleanup?.()
+          syncCleanup = undefined
         }
       },
     },
@@ -223,10 +224,17 @@ export function drizzleCollectionOptions<
           throw new Error('Sync is not defined')
         }
 
+        syncCleanup?.()
+        syncCleanup = undefined
+
         const params = await syncParams
         await params.collection.stateWhenReady()
 
-        await sync()
+        const result = await sync()
+
+        if (typeof result === 'function') {
+          syncCleanup = result
+        }
       },
     },
   }

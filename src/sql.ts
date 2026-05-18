@@ -47,6 +47,7 @@ export function sqlCollectionOptions<
   schema: typeof config.schema
 } {
   type SyncParamsType = SyncParams<Output<Schema>>
+  let syncCleanup: (() => void) | undefined
   const table = quoteId(config.tableName)
   const primaryKey = quoteId(config.primaryKeyColumn)
   const getKey = config.getKey ?? ((row: Output<Schema>) => String(row[config.primaryKeyColumn]))
@@ -147,8 +148,6 @@ export function sqlCollectionOptions<
       sync: (params) => {
         resolveSyncParams(params as SyncParamsType)
 
-        let cleanup: (() => void) | undefined
-
         ;(async () => {
           await config.prepare?.()
           const rows = await runSelect(config.db)
@@ -160,7 +159,7 @@ export function sqlCollectionOptions<
           if (startSync) {
             const result = await sync()
             if (typeof result === 'function') {
-              cleanup = result
+              syncCleanup = result
             }
           }
           else {
@@ -169,7 +168,8 @@ export function sqlCollectionOptions<
         })()
 
         return () => {
-          cleanup?.()
+          syncCleanup?.()
+          syncCleanup = undefined
         }
       },
     },
@@ -213,7 +213,10 @@ export function sqlCollectionOptions<
         const params = await syncParams
         await params.collection.stateWhenReady()
 
-        await sync()
+        const result = await sync()
+        if (typeof result === 'function') {
+          syncCleanup = result
+        }
       },
     },
   }
