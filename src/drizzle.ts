@@ -17,6 +17,14 @@ import { createSelectSchema } from 'drizzle-zod'
 type Schema<Table extends PgTable> = StandardSchemaV1<Table['$inferSelect'], Table['$inferSelect']>
 type SyncParams<Table extends PgTable> = Parameters<SyncConfig<Table['$inferSelect'], string>['sync']>[0]
 
+/**
+ * Creates collection options backed by Drizzle ORM on PGlite.
+ *
+ * The adapter loads initial data from PGlite before invoking the user-provided `sync` callback.
+ * If your sync establishes a real-time subscription, events emitted during the initial PGlite
+ * read may be missed. To avoid data loss, subscribe to real-time events first and buffer them
+ * until `markReady()` is called.
+ */
 export function drizzleCollectionOptions<
   Table extends PgTable,
 >({
@@ -28,7 +36,8 @@ export function drizzleCollectionOptions<
   startSync?: boolean
   table: Table
   primaryColumn: IndexColumn
-  sync?: (params: Pick<SyncParams<Table>, 'write' | 'collection' | 'markReady'>) => Promise<void>
+  rowUpdateMode?: 'partial' | 'full'
+  sync?: (params: Pick<SyncParams<Table>, 'write' | 'collection' | 'markReady' | 'metadata'>) => Promise<(() => void) | void>
   prepare?: () => Promise<unknown> | unknown
   onInsert?: (params: InsertMutationFnParams<Table['$inferSelect'], string>) => Promise<void>
   onUpdate?: (params: UpdateMutationFnParams<Table['$inferSelect'], string>) => Promise<void>
@@ -106,15 +115,19 @@ export function drizzleCollectionOptions<
       .where(eq(config.primaryColumn, m.key))))
   }
 
-  const sync = async () => {
+  const sync = async (force = false): Promise<(() => void) | void> => {
     const params = await syncParams
+
+    if (force) {
+      params.truncate()
+    }
 
     if (!config.sync) {
       params.markReady()
       return
     }
 
-    await config.sync({
+    return config.sync({
       write: async (message) => {
         if (message.type === 'insert') {
           await onDrizzleInsert([message.value])
@@ -135,16 +148,20 @@ export function drizzleCollectionOptions<
       },
       collection: params.collection,
       markReady: params.markReady,
+      ...(params.metadata && { metadata: params.metadata }),
     })
   }
 
   return {
-    startSync: true,
+    startSync,
     autoIndex: 'eager',
     defaultIndexType: BasicIndex,
     sync: {
+      ...(config.rowUpdateMode && { rowUpdateMode: config.rowUpdateMode }),
       sync: (params) => {
         resolveSyncParams(params as SyncParamsType)
+
+        let cleanup: (() => void) | undefined
 
         ;(async () => {
           await config.prepare?.()
@@ -157,9 +174,19 @@ export function drizzleCollectionOptions<
           })
           params.commit()
           if (startSync) {
-            await sync()
+            const result = await sync()
+            if (typeof result === 'function') {
+              cleanup = result
+            }
+          }
+          else {
+            params.markReady()
           }
         })()
+
+        return () => {
+          cleanup?.()
+        }
       },
     },
     schema: createSelectSchema(config.table),
@@ -203,7 +230,7 @@ export function drizzleCollectionOptions<
         const params = await syncParams
         await params.collection.stateWhenReady()
 
-        await sync()
+        await sync(true)
       },
     },
   }

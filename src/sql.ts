@@ -17,6 +17,14 @@ type Output<T extends StandardSchemaV1> = StandardSchemaV1.InferOutput<T>
 
 type SyncParams<ItemType extends Record<string, unknown>> = Parameters<SyncConfig<ItemType, string>['sync']>[0]
 
+/**
+ * Creates collection options backed by raw SQL on PGlite.
+ *
+ * The adapter loads initial data from PGlite before invoking the user-provided `sync` callback.
+ * If your sync establishes a real-time subscription, events emitted during the initial PGlite
+ * read may be missed. To avoid data loss, subscribe to real-time events first and buffer them
+ * until `markReady()` is called.
+ */
 export function sqlCollectionOptions<
   Schema extends StandardSchemaV1<Record<string, unknown>>,
 >({
@@ -27,10 +35,11 @@ export function sqlCollectionOptions<
   startSync?: boolean
   tableName: string
   primaryKeyColumn: Extract<keyof Output<Schema>, string>
+  rowUpdateMode?: 'partial' | 'full'
   schema: Schema
   getKey?: (row: Output<Schema>) => string
   prepare?: () => Promise<unknown> | unknown
-  sync?: (params: Pick<SyncParams<Output<Schema>>, 'write' | 'collection' | 'markReady'>) => Promise<void>
+  sync?: (params: Pick<SyncParams<Output<Schema>>, 'write' | 'collection' | 'markReady' | 'metadata'>) => Promise<(() => void) | void>
   onInsert?: (params: InsertMutationFnParams<Output<Schema>, string>) => Promise<void>
   onUpdate?: (params: UpdateMutationFnParams<Output<Schema>, string>) => Promise<void>
   onDelete?: (params: DeleteMutationFnParams<Output<Schema>, string>) => Promise<void>
@@ -93,15 +102,19 @@ export function sqlCollectionOptions<
     commit()
   }
 
-  const sync = async () => {
+  const sync = async (force = false): Promise<(() => void) | void> => {
     const params = await syncParams
+
+    if (force) {
+      params.truncate()
+    }
 
     if (!config.sync) {
       params.markReady()
       return
     }
 
-    await config.sync(
+    return config.sync(
       {
         write: async (p) => {
           if (p.type === 'insert') {
@@ -124,6 +137,7 @@ export function sqlCollectionOptions<
         },
         collection: params.collection,
         markReady: params.markReady,
+        ...(params.metadata && { metadata: params.metadata }),
       },
     )
   }
@@ -133,8 +147,11 @@ export function sqlCollectionOptions<
     autoIndex: 'eager',
     defaultIndexType: BasicIndex,
     sync: {
+      ...(config.rowUpdateMode && { rowUpdateMode: config.rowUpdateMode }),
       sync: (params) => {
         resolveSyncParams(params as SyncParamsType)
+
+        let cleanup: (() => void) | undefined
 
         ;(async () => {
           await config.prepare?.()
@@ -145,9 +162,19 @@ export function sqlCollectionOptions<
           })
           params.commit()
           if (startSync) {
-            await sync()
+            const result = await sync()
+            if (typeof result === 'function') {
+              cleanup = result
+            }
+          }
+          else {
+            params.markReady()
           }
         })()
+
+        return () => {
+          cleanup?.()
+        }
       },
     },
     schema: config.schema,
@@ -190,7 +217,7 @@ export function sqlCollectionOptions<
         const params = await syncParams
         await params.collection.stateWhenReady()
 
-        await sync()
+        await sync(true)
       },
     },
   }
