@@ -30,7 +30,7 @@ export function sqlCollectionOptions<
   schema: Schema
   getKey?: (row: Output<Schema>) => string
   prepare?: () => Promise<unknown> | unknown
-  sync?: (params: Pick<SyncParams<Output<Schema>>, 'write' | 'collection'>) => Promise<void>
+  sync?: (params: Pick<SyncParams<Output<Schema>>, 'write' | 'collection' | 'markReady'>) => Promise<void>
   onInsert?: (params: InsertMutationFnParams<Output<Schema>, string>) => Promise<void>
   onUpdate?: (params: UpdateMutationFnParams<Output<Schema>, string>) => Promise<void>
   onDelete?: (params: DeleteMutationFnParams<Output<Schema>, string>) => Promise<void>
@@ -38,7 +38,6 @@ export function sqlCollectionOptions<
   schema: typeof config.schema
 } {
   type SyncParamsType = SyncParams<Output<Schema>>
-  let resolvers = Promise.withResolvers<{ continue: boolean }>()
   const table = quoteId(config.tableName)
   const primaryKey = quoteId(config.primaryKeyColumn)
   const getKey = config.getKey ?? ((row: Output<Schema>) => String(row[config.primaryKeyColumn]))
@@ -95,15 +94,13 @@ export function sqlCollectionOptions<
   }
 
   const sync = async () => {
+    const params = await syncParams
+
     if (!config.sync) {
+      params.markReady()
       return
     }
 
-    const params = await syncParams
-
-    const previousResolvers = resolvers
-    resolvers = Promise.withResolvers()
-    previousResolvers.resolve({ continue: true })
     await config.sync(
       {
         write: async (p) => {
@@ -126,13 +123,9 @@ export function sqlCollectionOptions<
           params.commit()
         },
         collection: params.collection,
+        markReady: params.markReady,
       },
     )
-    resolvers.resolve({ continue: false })
-  }
-
-  const waitForSync = async () => {
-    await resolvers.promise.then(r => r.continue ? waitForSync() : undefined)
   }
 
   return {
@@ -144,20 +137,15 @@ export function sqlCollectionOptions<
         resolveSyncParams(params as SyncParamsType)
 
         ;(async () => {
-          try {
-            await config.prepare?.()
-            const rows = await runSelect(config.db)
-            params.begin()
-            rows.forEach((row) => {
-              params.write({ type: 'insert', value: row })
-            })
-            params.commit()
-            if (startSync) {
-              sync()
-            }
-          }
-          finally {
-            params.markReady()
+          await config.prepare?.()
+          const rows = await runSelect(config.db)
+          params.begin()
+          rows.forEach((row) => {
+            params.write({ type: 'insert', value: row })
+          })
+          params.commit()
+          if (startSync) {
+            await sync()
           }
         })()
       },
@@ -204,7 +192,6 @@ export function sqlCollectionOptions<
 
         await sync()
       },
-      waitForSync,
     },
   }
 }

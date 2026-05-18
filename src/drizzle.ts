@@ -28,7 +28,7 @@ export function drizzleCollectionOptions<
   startSync?: boolean
   table: Table
   primaryColumn: IndexColumn
-  sync?: (params: Pick<SyncParams<Table>, 'write' | 'collection'>) => Promise<void>
+  sync?: (params: Pick<SyncParams<Table>, 'write' | 'collection' | 'markReady'>) => Promise<void>
   prepare?: () => Promise<unknown> | unknown
   onInsert?: (params: InsertMutationFnParams<Table['$inferSelect'], string>) => Promise<void>
   onUpdate?: (params: UpdateMutationFnParams<Table['$inferSelect'], string>) => Promise<void>
@@ -37,7 +37,6 @@ export function drizzleCollectionOptions<
   schema: Schema<Table>
 } {
   type SyncParamsType = SyncParams<Table>
-  let resolvers = Promise.withResolvers<{ continue: boolean }>()
   // Sync params can be null while running PGLite migrations
   const { promise: syncParams, resolve: resolveSyncParams } = Promise.withResolvers<SyncParamsType>()
 
@@ -108,15 +107,13 @@ export function drizzleCollectionOptions<
   }
 
   const sync = async () => {
+    const params = await syncParams
+
     if (!config.sync) {
+      params.markReady()
       return
     }
 
-    const params = await syncParams
-
-    const previousResolvers = resolvers
-    resolvers = Promise.withResolvers()
-    previousResolvers.resolve({ continue: true })
     await config.sync({
       write: async (message) => {
         if (message.type === 'insert') {
@@ -137,12 +134,8 @@ export function drizzleCollectionOptions<
         params.commit()
       },
       collection: params.collection,
+      markReady: params.markReady,
     })
-    resolvers.resolve({ continue: false })
-  }
-
-  const waitForSync = async () => {
-    await resolvers.promise.then(r => r.continue ? waitForSync() : undefined)
   }
 
   return {
@@ -154,22 +147,17 @@ export function drizzleCollectionOptions<
         resolveSyncParams(params as SyncParamsType)
 
         ;(async () => {
-          try {
-            await config.prepare?.()
-            // @ts-expect-error drizzle types
-            const dbs = await config.db.select().from(config.table)
+          await config.prepare?.()
+          // @ts-expect-error drizzle types
+          const dbs = await config.db.select().from(config.table)
 
-            params.begin()
-            dbs.forEach((db) => {
-              params.write({ type: 'insert', value: db })
-            })
-            params.commit()
-            if (startSync) {
-              sync()
-            }
-          }
-          finally {
-            params.markReady()
+          params.begin()
+          dbs.forEach((db) => {
+            params.write({ type: 'insert', value: db })
+          })
+          params.commit()
+          if (startSync) {
+            await sync()
           }
         })()
       },
@@ -217,7 +205,6 @@ export function drizzleCollectionOptions<
 
         await sync()
       },
-      waitForSync,
     },
   }
 }
