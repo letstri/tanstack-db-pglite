@@ -3,13 +3,9 @@ import type { PGliteWorker } from '@electric-sql/pglite/worker'
 import type { StandardSchemaV1 } from '@standard-schema/spec'
 import type { CollectionConfig, DeleteMutationFnParams, InsertMutationFnParams, PendingMutation, SyncConfig, UpdateMutationFnParams } from '@tanstack/db'
 import type { PgliteUtils } from './utils'
-import {
-  BasicIndex,
-
-} from '@tanstack/db'
+import { BasicIndex } from '@tanstack/db'
 
 function quoteId(name: string) {
-  // eslint-disable-next-line e18e/prefer-static-regex
   return `"${String(name).replace(/"/g, '""')}"`
 }
 
@@ -33,13 +29,14 @@ export function sqlCollectionOptions<
 }: {
   db: PGlite | PGliteWorker
   startSync?: boolean
+  sync?: {
+    sync: (params: Pick<SyncParams<Output<Schema>>, 'write' | 'collection' | 'markReady' | 'metadata'>) => Promise<(() => void) | void>
+  } & Omit<SyncConfig, 'sync'>
   tableName: string
   primaryKeyColumn: Extract<keyof Output<Schema>, string>
-  rowUpdateMode?: 'partial' | 'full'
   schema: Schema
   getKey?: (row: Output<Schema>) => string
   prepare?: () => Promise<unknown> | unknown
-  sync?: (params: Pick<SyncParams<Output<Schema>>, 'write' | 'collection' | 'markReady' | 'metadata'>) => Promise<(() => void) | void>
   onInsert?: (params: InsertMutationFnParams<Output<Schema>, string>) => Promise<void>
   onUpdate?: (params: UpdateMutationFnParams<Output<Schema>, string>) => Promise<void>
   onDelete?: (params: DeleteMutationFnParams<Output<Schema>, string>) => Promise<void>
@@ -111,7 +108,7 @@ export function sqlCollectionOptions<
       return
     }
 
-    return config.sync(
+    return config.sync.sync(
       {
         write: async (p) => {
           if (p.type === 'insert') {
@@ -144,7 +141,7 @@ export function sqlCollectionOptions<
     autoIndex: 'eager',
     defaultIndexType: BasicIndex,
     sync: {
-      ...(config.rowUpdateMode && { rowUpdateMode: config.rowUpdateMode }),
+      ...config.sync,
       sync: (params) => {
         resolveSyncParams(params as SyncParamsType)
 

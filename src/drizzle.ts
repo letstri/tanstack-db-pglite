@@ -34,10 +34,11 @@ export function drizzleCollectionOptions<
   // eslint-disable-next-line ts/no-explicit-any
   db: PgliteDatabase<any>
   startSync?: boolean
+  sync?: {
+    sync: (params: Pick<SyncParams<Table>, 'write' | 'collection' | 'markReady' | 'metadata'>) => Promise<(() => void) | void>
+  } & Omit<SyncConfig, 'sync'>
   table: Table
   primaryColumn: IndexColumn
-  rowUpdateMode?: 'partial' | 'full'
-  sync?: (params: Pick<SyncParams<Table>, 'write' | 'collection' | 'markReady' | 'metadata'>) => Promise<(() => void) | void>
   prepare?: () => Promise<unknown> | unknown
   onInsert?: (params: InsertMutationFnParams<Table['$inferSelect'], string>) => Promise<void>
   onUpdate?: (params: UpdateMutationFnParams<Table['$inferSelect'], string>) => Promise<void>
@@ -125,7 +126,7 @@ export function drizzleCollectionOptions<
       return
     }
 
-    return config.sync({
+    return config.sync.sync({
       write: async (message) => {
         if (message.type === 'insert') {
           await onDrizzleInsert([message.value])
@@ -155,7 +156,7 @@ export function drizzleCollectionOptions<
     autoIndex: 'eager',
     defaultIndexType: BasicIndex,
     sync: {
-      ...(config.rowUpdateMode && { rowUpdateMode: config.rowUpdateMode }),
+      ...config.sync,
       sync: (params) => {
         resolveSyncParams(params as SyncParamsType)
 
@@ -174,9 +175,6 @@ export function drizzleCollectionOptions<
             if (typeof result === 'function') {
               syncCleanup = result
             }
-          }
-          else {
-            params.markReady()
           }
         })()
 
