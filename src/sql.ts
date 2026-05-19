@@ -207,9 +207,6 @@ export function sqlCollectionOptions<
           throw new Error('Sync is not defined')
         }
 
-        const params = await syncParams
-        await params.collection.stateWhenReady()
-
         const result = await sync()
         if (typeof result === 'function') {
           syncCleanup = result

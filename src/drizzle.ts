@@ -225,9 +225,6 @@ export function drizzleCollectionOptions<
         syncCleanup?.()
         syncCleanup = undefined
 
-        const params = await syncParams
-        await params.collection.stateWhenReady()
-
         const result = await sync()
 
         if (typeof result === 'function') {
