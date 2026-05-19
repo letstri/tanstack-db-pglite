@@ -38,14 +38,12 @@ export const chatsCollection = createCollection(drizzleCollectionOptions({
   prepare: async () => {
     await waitForMigrations()
   },
-  sync: async ({ begin, commit, write, markReady }) => {
+  sync: async ({ write, markReady }) => {
     const eventSource = new EventSource('/api/chats/sync')
 
     eventSource.onmessage = (event) => {
       const item = JSON.parse(event.data)
-      begin()
       write(item)
-      commit()
     }
 
     eventSource.addEventListener('ready', () => markReady())
@@ -96,14 +94,12 @@ export const chatsCollection = createCollection(sqlCollectionOptions({
       )
     `)
   },
-  sync: async ({ begin, commit, write, markReady }) => {
+  sync: async ({ write, markReady }) => {
     const eventSource = new EventSource('/api/chats/sync')
 
     eventSource.onmessage = (event) => {
       const item = JSON.parse(event.data)
-      begin()
       write(item)
-      commit()
     }
 
     eventSource.addEventListener('ready', () => markReady())

@@ -37,7 +37,7 @@ export function drizzleCollectionOptions<
   table: Table
   primaryColumn: IndexColumn
   rowUpdateMode?: 'partial' | 'full'
-  sync?: (params: SyncParams<Table>) => Promise<(() => void) | void>
+  sync?: (params: Pick<SyncParams<Table>, 'write' | 'collection' | 'markReady' | 'metadata'>) => Promise<(() => void) | void>
   prepare?: () => Promise<unknown> | unknown
   onInsert?: (params: InsertMutationFnParams<Table['$inferSelect'], string>) => Promise<void>
   onUpdate?: (params: UpdateMutationFnParams<Table['$inferSelect'], string>) => Promise<void>
@@ -140,13 +140,12 @@ export function drizzleCollectionOptions<
           const key = 'key' in message ? message.key : params.collection.getKeyFromItem(message.value)
           await onDrizzleDelete([key])
         }
+        params.begin()
         params.write(message)
+        params.commit()
       },
       collection: params.collection,
       markReady: params.markReady,
-      begin: params.begin,
-      commit: params.commit,
-      truncate: params.truncate,
       ...(params.metadata && { metadata: params.metadata }),
     })
   }
