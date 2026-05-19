@@ -1,0 +1,4 @@
+minimumReleaseAgeExclude:
+  - taze@19.13.0
+shellEmulator: true
+trustPolicy: no-downgrade
