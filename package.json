@@ -1,6 +1,6 @@
 {
   "name": "tanstack-db-pglite",
-  "version": "1.4.1",
+  "version": "1.5.0",
   "packageManager": "pnpm@11.1.3",
   "author": "Valerii Strilets",
   "license": "MIT",

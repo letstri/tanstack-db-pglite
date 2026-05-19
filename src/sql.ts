@@ -1,7 +1,7 @@
 import type { PGlite, Transaction } from '@electric-sql/pglite'
 import type { PGliteWorker } from '@electric-sql/pglite/worker'
 import type { StandardSchemaV1 } from '@standard-schema/spec'
-import type { CollectionConfig, DeleteMutationFnParams, InsertMutationFnParams, PendingMutation, SyncConfig, UpdateMutationFnParams } from '@tanstack/db'
+import type { ChangeMessageOrDeleteKeyMessage, CollectionConfig, DeleteMutationFnParams, InsertMutationFnParams, PendingMutation, SyncConfig, UpdateMutationFnParams } from '@tanstack/db'
 import type { PgliteUtils } from './utils'
 import { BasicIndex } from '@tanstack/db'
 
@@ -13,6 +13,12 @@ type Output<T extends StandardSchemaV1> = StandardSchemaV1.InferOutput<T>
 
 type SyncParams<ItemType extends Record<string, unknown>> = Parameters<SyncConfig<ItemType, string>['sync']>[0]
 
+type CustomSyncParams<ItemType extends Record<string, unknown>> = Pick<SyncParams<ItemType>, 'collection' | 'markReady' | 'metadata'> & {
+  /**
+   * We created async version of "write" callback due to synchronization with PGLite
+   */
+  writeAsync: (message: ChangeMessageOrDeleteKeyMessage<ItemType, string>) => Promise<void>
+}
 /**
  * Creates collection options backed by raw SQL on PGlite.
  *
@@ -30,7 +36,7 @@ export function sqlCollectionOptions<
   db: PGlite | PGliteWorker
   startSync?: boolean
   sync?: {
-    sync: (params: Pick<SyncParams<Output<Schema>>, 'write' | 'collection' | 'markReady' | 'metadata'>) => Promise<(() => void) | void>
+    sync: (params: CustomSyncParams<Output<Schema>>) => Promise<(() => void) | void>
   } & Omit<SyncConfig, 'sync'>
   tableName: string
   primaryKeyColumn: Extract<keyof Output<Schema>, string>
@@ -108,32 +114,30 @@ export function sqlCollectionOptions<
       return
     }
 
-    return config.sync.sync(
-      {
-        write: async (p) => {
-          if (p.type === 'insert') {
-            await runInsert(config.db, [p.value])
-          }
-          else if (p.type === 'update') {
-            await runUpdate(
-              config.db,
-              params.collection.getKeyFromItem(p.value),
-              p.value,
-            )
-          }
-          else if (p.type === 'delete') {
-            const key = 'key' in p ? p.key : params.collection.getKeyFromItem(p.value)
-            await runDelete(config.db, [key])
-          }
-          params.begin()
-          params.write(p)
-          params.commit()
-        },
-        collection: params.collection,
-        markReady: params.markReady,
-        ...(params.metadata && { metadata: params.metadata }),
+    return config.sync.sync({
+      writeAsync: async (p) => {
+        if (p.type === 'insert') {
+          await runInsert(config.db, [p.value])
+        }
+        else if (p.type === 'update') {
+          await runUpdate(
+            config.db,
+            params.collection.getKeyFromItem(p.value),
+            p.value,
+          )
+        }
+        else if (p.type === 'delete') {
+          const key = 'key' in p ? p.key : params.collection.getKeyFromItem(p.value)
+          await runDelete(config.db, [key])
+        }
+        params.begin()
+        params.write(p)
+        params.commit()
       },
-    )
+      collection: params.collection,
+      markReady: params.markReady,
+      ...(params.metadata && { metadata: params.metadata }),
+    })
   }
 
   return {

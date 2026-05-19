@@ -1,5 +1,6 @@
 import type { StandardSchemaV1 } from '@standard-schema/spec'
 import type {
+  ChangeMessageOrDeleteKeyMessage,
   CollectionConfig,
   DeleteMutationFnParams,
   InsertMutationFnParams,
@@ -16,6 +17,12 @@ import { createSelectSchema } from 'drizzle-zod'
 
 type Schema<Table extends PgTable> = StandardSchemaV1<Table['$inferSelect'], Table['$inferSelect']>
 type SyncParams<Table extends PgTable> = Parameters<SyncConfig<Table['$inferSelect'], string>['sync']>[0]
+type CustomSyncParams<Table extends PgTable> = Pick<SyncParams<Table>, 'collection' | 'markReady' | 'metadata'> & {
+  /**
+   * We created async version of "write" callback due to synchronization with PGLite
+   */
+  writeAsync: (message: ChangeMessageOrDeleteKeyMessage<Table['$inferSelect'], string>) => Promise<void>
+}
 
 /**
  * Creates collection options backed by Drizzle ORM on PGlite.
@@ -35,7 +42,7 @@ export function drizzleCollectionOptions<
   db: PgliteDatabase<any>
   startSync?: boolean
   sync?: {
-    sync: (params: Pick<SyncParams<Table>, 'write' | 'collection' | 'markReady' | 'metadata'>) => Promise<(() => void) | void>
+    sync: (params: CustomSyncParams<Table>) => Promise<(() => void) | void>
   } & Omit<SyncConfig, 'sync'>
   table: Table
   primaryColumn: IndexColumn
@@ -127,7 +134,7 @@ export function drizzleCollectionOptions<
     }
 
     return config.sync.sync({
-      write: async (message) => {
+      writeAsync: async (message) => {
         if (message.type === 'insert') {
           await onDrizzleInsert([message.value])
         }
